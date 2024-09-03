@@ -1,26 +1,272 @@
-import { GetServerSidePropsContext } from 'next';
-import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
-import type { NextPageWithLayout } from 'types';
-import { useTranslation } from 'next-i18next';
+import React, { useState, useEffect } from 'react';
+import { AudienceProfile } from 'components/apiKey/types'; // Adjust the import path as necessary
+import { Progress, Spacer } from '@nextui-org/react';
 
-const Products: NextPageWithLayout = () => {
-  const { t } = useTranslation('common');
+const AIPrompt: React.FC = () => {
+  const [prompt, setPrompt] = useState('');
+  const [response, setResponse] = useState<AudienceProfile[]>([]);
+  const [typing, setTyping] = useState(false);
+  const [audienceProfiles, setAudienceProfiles] = useState<AudienceProfile[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number>(0);
+  const [statusMessage, setStatusMessage] = useState<string>('');
+  const [isLoadingComplete, setIsLoadingComplete] = useState<boolean>(false);
+  const [, setFadeOut] = useState<boolean>(false);
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<AudienceProfile[]>([]);
+
+  useEffect(() => {
+    const loadAudienceProfiles = async () => {
+      try {
+        const res = await fetch('https://x8ki-letl-twmt.n7.xano.io/api:KpVdnEgh/get_audience_profiles');
+        if (!res.ok) {
+          throw new Error(`Failed to fetch audience profiles: ${res.status} ${res.statusText}`);
+        }
+        const data: AudienceProfile[] = await res.json();
+        setAudienceProfiles(data);
+      } catch (error) {
+        console.error('Error loading audience profiles:', error);
+        setError((error as Error).message);
+      }
+    };
+
+    loadAudienceProfiles();
+  }, []);
+
+  const handlePromptChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPrompt = e.target.value;
+    setPrompt(newPrompt);
+    if (newPrompt.length > 0) {
+      updateAutocompleteSuggestions(newPrompt);
+    } else {
+      setAutocompleteSuggestions([]);
+    }
+  };
+
+  const updateAutocompleteSuggestions = (input: string) => {
+    const lowerCaseInput = input.toLowerCase();
+
+    const filtered = audienceProfiles.filter((profile) => {
+      const normalizedAudienceProfiles = profile.Audience_Profiles
+        .replace(/\n/g, ' ')     // Replace newlines with spaces
+        .replace(/•/g, '')       // Remove bullet points
+        .toLowerCase();
+
+      const normalizedKeyActions = profile.Key_Actions
+        .replace(/\n/g, ' ')
+        .replace(/•/g, '')
+        .toLowerCase();
+
+      const normalizedInterventions = profile.Interventions
+        .replace(/\n/g, ' ')
+        .replace(/•/g, '')
+        .toLowerCase();
+
+      const normalizedChannels = profile.Channels
+        .replace(/\n/g, ' ')
+        .replace(/•/g, '')
+        .toLowerCase();
+
+      const normalizedTools = profile.Tools
+        .replace(/\n/g, ' ')
+        .replace(/•/g, '')
+        .toLowerCase();
+
+      return (
+        profile.Name.toLowerCase().includes(lowerCaseInput) ||
+        normalizedAudienceProfiles.includes(lowerCaseInput) ||
+        normalizedKeyActions.includes(lowerCaseInput) ||
+        normalizedInterventions.includes(lowerCaseInput) ||
+        normalizedChannels.includes(lowerCaseInput) ||
+        normalizedTools.includes(lowerCaseInput)
+      );
+    });
+
+    setAutocompleteSuggestions(filtered);
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setTyping(true);
+    setIsLoadingComplete(false);
+    setFadeOut(false);
+    setAutocompleteSuggestions([]); // Hide suggestions on submit
+
+    const statusMessages = [
+      'Processing your Prompt',
+      'Finding a Match',
+      'Checking Accuracy',
+      'Almost Done!',
+      'Finalizing Result'
+    ];
+
+    let progressValue = 0;
+    let statusIndex = 0;
+
+    const updateStatus = () => {
+      if (statusIndex < statusMessages.length) {
+        setFadeOut(true);
+        setTimeout(() => {
+          setStatusMessage(statusMessages[statusIndex]);
+          setFadeOut(false);
+          statusIndex++;
+          setTimeout(updateStatus, 3000); // Wait 3 seconds before next update
+        }, 500); // Wait for fade out
+      } else {
+        setIsLoadingComplete(true);
+        finishLoading();
+      }
+    };
+
+    const updateProgress = () => {
+      if (progressValue < 100) {
+        progressValue += 1;
+        setProgress(progressValue);
+        setTimeout(updateProgress, 100);
+      }
+    };
+
+
+    updateStatus();
+    updateProgress();
+  };
+
+  const finishLoading = () => {
+    if (prompt.length === 0) {
+      setResponse([]);
+      return;
+    }
+
+    const lowerCasePrompt = prompt.toLowerCase();
+
+    const filtered = audienceProfiles.filter((profile) => {
+      const normalizedAudienceProfiles = profile.Audience_Profiles
+        .replace(/\n/g, ' ')     // Replace newlines with spaces
+        .replace(/•/g, '')       // Remove bullet points
+        .toLowerCase();
+
+      const normalizedKeyActions = profile.Key_Actions
+        .replace(/\n/g, ' ')
+        .replace(/•/g, '')
+        .toLowerCase();
+
+      const normalizedInterventions = profile.Interventions
+        .replace(/\n/g, ' ')
+        .replace(/•/g, '')
+        .toLowerCase();
+
+      const normalizedChannels = profile.Channels
+        .replace(/\n/g, ' ')
+        .replace(/•/g, '')
+        .toLowerCase();
+
+      const normalizedTools = profile.Tools
+        .replace(/\n/g, ' ')
+        .replace(/•/g, '')
+        .toLowerCase();
+
+      return (
+        profile.Name.toLowerCase().includes(lowerCasePrompt) ||
+        normalizedAudienceProfiles.includes(lowerCasePrompt) ||
+        normalizedKeyActions.includes(lowerCasePrompt) ||
+        normalizedInterventions.includes(lowerCasePrompt) ||
+        normalizedChannels.includes(lowerCasePrompt) ||
+        normalizedTools.includes(lowerCasePrompt)
+      );
+    });
+
+    setResponse(filtered);  // Use setResponse instead of setFilteredProfiles
+    setProgress(100);
+    setTyping(false);
+
+    if (filtered.length === 0) {
+      setTimeout(() => {
+        setIsLoadingComplete(true);
+      }, 3000);
+    }
+  };
 
   return (
-    <div className="p-3">
-      <p className="text-sm">{t('product-placeholder')}</p>
+    <div className="ai-prompt-ui p-4 bg-white text-black border border-black">
+      {error && (
+        <div className="error-message mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+          {error}
+        </div>
+      )}
+      <form onSubmit={handleSubmit}>
+        <input
+          type="text"
+          id="prompt"
+          value={prompt}
+          onChange={handlePromptChange}
+          className="w-full px-4 py-2 mb-4 bg-white text-black border border-black focus:ring-0 focus:border-black focus:bg-white"
+          placeholder="Search Audience Profile Here..."
+          required
+        />
+        <button
+          type="submit"
+          className="px-4 py-2 text-sm font-medium bg-black text-white border border-black hover:bg-gray-800"
+        >
+          {'Submit'}
+        </button>
+      </form>
+      {typing && (
+        <div className="mt-4 p-4 bg-white text-black border border-black">
+          <div className="relative pt-1 w-full">
+            <Progress
+              size="sm"
+              radius="sm"
+              classNames={{
+                base: "w-full",
+                track: "drop-shadow-md border border-default",
+                indicator: "bg-gradient-to-r from-pink-500 to-yellow-500",
+                label: "tracking-wider font-light text-default-300",
+                value: "text-foreground/60",
+              }}
+              label={statusMessage}
+              value={progress}
+              showValueLabel={true}
+            />
+          </div>
+        </div>
+      )}
+      {autocompleteSuggestions.length > 0 && !typing && (
+        <div className="mt-4 p-4 bg-white text-black border border-black">
+          <ul>
+            {autocompleteSuggestions.map((profile, index) => (
+              <li key={index} className="p-2 border-b border-gray-200">
+                {profile.Name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {isLoadingComplete && response.length > 0 && (
+        <div className="mt-4 p-4 text-black border border-black transition-opacity duration-500 ease-in-out text-left">
+          <h1 className="text-lg font-light">{'Your search matches with the following profile(s): '}{response[0].Name}</h1>
+          <Spacer y={5} />
+          <h3 className="text-lg">{'Audience Profile:'}</h3>
+          <Spacer y={2} />
+          <h3 className="text-lg font-light text-justify">{response[0].Audience_Profiles}</h3>
+          <Spacer y={4} />
+          <h3 className="text-lg">{'Key Actions:'}</h3>
+          <Spacer y={2} />
+          <h3 className="text-lg font-light text-justify">{response[0].Key_Actions}</h3>
+          <Spacer y={4} />
+          <h3 className="text-lg">{'Interventions:'}</h3>
+          <Spacer y={2} />
+          <h3 className="text-lg font-light text-justify">{response[0].Interventions}</h3>
+          <Spacer y={4} />
+          <h3 className="text-lg">{'Channels:'}</h3>
+          <Spacer y={2} />
+          <h3 className="text-lg font-light text-justify">{response[0].Channels}</h3>
+          <Spacer y={4} />
+          <h3 className="text-lg">{'Tools:'}</h3>
+          <Spacer y={2} />
+          <h3 className="text-lg font-light text-justify">{response[0].Tools}</h3>
+        </div>
+      )}
     </div>
   );
 };
 
-export async function getServerSideProps({
-  locale,
-}: GetServerSidePropsContext) {
-  return {
-    props: {
-      ...(locale ? await serverSideTranslations(locale, ['common']) : {}),
-    },
-  };
-}
-
-export default Products;
+export default AIPrompt;
